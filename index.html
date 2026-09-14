@@ -30,6 +30,7 @@
   }
   *{box-sizing:border-box;}
   .lock-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100;padding:var(--sp-4);}
+  .lock-screen[hidden]{display:none;}
   .lock-card{width:100%;max-width:300px;text-align:center;}
   .lock-card .brand{justify-content:center;margin-bottom:var(--sp-2);}
   .lock-sub{color:var(--text-tertiary);font-size:.85rem;margin-bottom:var(--sp-5);}
@@ -154,11 +155,13 @@
   .split-amount:hover{background:var(--bg-elevated-2);}
   .add-split-row{margin-top:var(--sp-2);}
   .split-form{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .split-form[hidden]{display:none;}
   .split-form input{background:var(--bg-elevated-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.82rem;color:var(--text-primary);}
   .split-form input[data-field="name"]{flex:2;min-width:100px;}
   .split-form input[data-field="amount"]{flex:1;min-width:80px;}
   .add-account-row{margin-top:var(--sp-3);}
   .inline-form{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .inline-form[hidden]{display:none;}
   .inline-form input{background:var(--bg-elevated-2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:.85rem;color:var(--text-primary);}
   .inline-form input[data-field="name"]{flex:2;min-width:120px;}
   .inline-form input[data-field="amount"]{flex:1;min-width:90px;}
