@@ -171,15 +171,11 @@
   .card.liability{border-color:rgba(196,103,95,0.35);}
   .card.liability .card-amount{color:var(--negative);}
   .category-total.negative{color:var(--negative);}
-  .cat-type-badge{font-size:.66rem;padding:3px 8px;border-radius:20px;background:var(--bg-elevated-2);color:var(--text-tertiary);cursor:pointer;white-space:nowrap;flex-shrink:0;}
+  .cat-type-badge{font:inherit;font-size:.66rem;padding:3px 8px;border-radius:20px;border:none;background:var(--bg-elevated-2);color:var(--text-tertiary);cursor:pointer;white-space:nowrap;flex-shrink:0;}
   .cat-type-badge:hover{border:1px solid var(--accent);}
   .cat-type-badge.liability{color:var(--negative);background:rgba(196,103,95,0.12);}
-  .modal-form .type-choice{margin-bottom:var(--sp-4);}
-  .modal-form label.radio-label{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;cursor:pointer;}
-  .radio-label input{margin-top:3px;flex-shrink:0;accent-color:var(--accent);}
-  .radio-text{display:flex;flex-direction:column;min-width:0;}
-  .radio-title{color:var(--text-primary);font-size:.85rem;}
-  .radio-hint{color:var(--text-tertiary);font-size:.72rem;margin-top:1px;}
+  .modal-type-row{display:flex;align-items:center;gap:10px;margin-bottom:var(--sp-4);}
+  .modal-type-label{color:var(--text-secondary);font-size:.82rem;}
 
   /* modal */
   .modal-backdrop{position:fixed;inset:0;background:rgba(10,9,8,.6);display:flex;align-items:center;justify-content:center;padding:var(--sp-4);z-index:50;}
@@ -1013,18 +1009,28 @@
   $('#addCategoryBtn').addEventListener('click', ()=>{
     openModal('Add category',
       '<label>Category name<input type="text" name="catname" required maxlength="30"></label>'
-      + '<div class="type-choice">'
-      + '<label class="radio-label"><input type="radio" name="cattype" value="asset" checked><span class="radio-text"><span class="radio-title">Asset</span><span class="radio-hint">adds to net worth</span></span></label>'
-      + '<label class="radio-label"><input type="radio" name="cattype" value="liability"><span class="radio-text"><span class="radio-title">Liability</span><span class="radio-hint">subtracts from net worth</span></span></label>'
+      + '<div class="modal-type-row">'
+      + '<span class="modal-type-label">Type</span>'
+      + '<button type="button" class="cat-type-badge" data-role="type-toggle" data-type="asset">Asset</button>'
       + '</div>',
       form=>{
         const name = form.catname.value.trim();
         if (!name) return;
-        const type = form.cattype.value;
+        const typeBtn = form.querySelector('[data-role="type-toggle"]');
+        const type = typeBtn ? typeBtn.dataset.type : 'asset';
         state.categories.push({ id: uid('c'), name, type, color: nextColor(), open:true, accounts:[] });
         render(); saveState();
       }
     );
+    const typeBtn = modalEl.querySelector('[data-role="type-toggle"]');
+    if (typeBtn){
+      typeBtn.addEventListener('click', ()=>{
+        const next = typeBtn.dataset.type === 'asset' ? 'liability' : 'asset';
+        typeBtn.dataset.type = next;
+        typeBtn.textContent = next === 'liability' ? 'Liability' : 'Asset';
+        typeBtn.classList.toggle('liability', next === 'liability');
+      });
+    }
   });
 
   /* ---------- PIN lock ---------- */
