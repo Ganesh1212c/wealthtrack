@@ -190,6 +190,7 @@
   /* footer */
   .footer{padding-top:var(--sp-5);border-top:1px solid var(--border-soft);}
   .footer p{color:var(--text-tertiary);font-size:.78rem;}
+  .footer-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;}
   .sync-status.error{color:var(--negative);}
   .sync-status.synced{color:var(--positive);}
 </style>
@@ -198,14 +199,14 @@
 <div class="lock-screen" id="lockScreen">
   <div class="lock-card">
     <div class="brand"><span class="brand-mark"></span>Ledger</div>
-    <p class="lock-sub">Enter PIN to continue</p>
+    <p class="lock-sub">Enter MPIN to continue</p>
     <div class="pin-dots" id="pinDots">
       <span class="pin-dot"></span>
       <span class="pin-dot"></span>
       <span class="pin-dot"></span>
       <span class="pin-dot"></span>
     </div>
-    <p class="lock-error" id="pinError" hidden>Incorrect PIN</p>
+    <p class="lock-error" id="pinError" hidden></p>
     <div class="keypad" id="keypad">
       <button class="key" data-key="1">1</button>
       <button class="key" data-key="2">2</button>
@@ -270,7 +271,10 @@
 
   <footer class="footer">
     <p class="sync-status" id="syncStatus">Not connected to a database yet</p>
-    <button class="btn btn-ghost small" id="backupBtn" style="margin-top:10px;">Download backup</button>
+    <div class="footer-actions">
+      <button class="btn btn-ghost small" id="backupBtn">Download backup</button>
+      <button class="btn btn-ghost small" id="changeMpinBtn">Change MPIN</button>
+    </div>
   </footer>
 </div>
 
@@ -287,19 +291,20 @@
   /*
     Data model lives in `state` below.
     Persistence: SUPABASE_URL / SUPABASE_ANON_KEY below sync every change to Supabase.
-    PIN lock: APP_PIN below is a simple front-door PIN (like a password on Apple Numbers) —
+    MPIN lock: APP_MPIN_DEFAULT below is a simple front-door PIN (like a password on Apple Numbers) —
     it's visible to anyone who views the page source, so treat it as a casual deterrent,
     not real security. Your data is still only as protected as your Supabase RLS policies.
   */
 
   const SUPABASE_URL = 'https://gdlvmeismfttgxtjnjyp.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_wzPwyUNpkWaZ-MHGDjnJog_Ey7bCfix';
-  const APP_PIN = '2702';
+  const APP_MPIN_DEFAULT = '2702'; // used only until an MPIN has been saved to Supabase
 
   const PALETTE = ['#C9A24B','#6E93B5','#8FAE83','#A98BB0','#5FA8A0','#C08552','#8B8FBF','#B58F62','#7FA6A0','#B0779A'];
 
   let state = {
     initialCapital: 87900,
+    mpin: '2702',
     categories: [
       { id:'fd', name:'Fixed Deposits', type:'asset', color: PALETTE[0], open:true, accounts:[
         {id:'fd1', name:'HDFC', amount:7301, splits:[]},
@@ -412,6 +417,17 @@
       setSyncStatus('error');
     }
   }
+
+  // Kicked off immediately on page load (in parallel with the lock screen),
+  // so the MPIN check doesn't need to wait for a fresh network round trip —
+  // by the time someone finishes typing 4 digits, this has usually resolved.
+  // boot() reuses this same promise instead of fetching a second time.
+  let stateLoadPromise = null;
+  function ensureStateLoaded(){
+    if (!stateLoadPromise) stateLoadPromise = loadState();
+    return stateLoadPromise;
+  }
+  ensureStateLoaded();
 
   let saveTimer = null;
   function saveState(){
@@ -1012,6 +1028,26 @@
   $('#clearHistoryBtn').addEventListener('click', clearHistory);
   $('#backupBtn').addEventListener('click', downloadBackup);
 
+  $('#changeMpinBtn').addEventListener('click', ()=>{
+    openModal('Change MPIN',
+      '<label>Current MPIN<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" name="currentMpin" required></label>'
+      + '<label>New MPIN (4 digits)<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" name="newMpin" required></label>'
+      + '<label>Confirm new MPIN<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" name="confirmMpin" required></label>',
+      form=>{
+        const current = form.currentMpin.value;
+        const next = form.newMpin.value;
+        const confirmVal = form.confirmMpin.value;
+        const correctMpin = state.mpin || APP_MPIN_DEFAULT;
+        if (current !== correctMpin){ alert('Current MPIN is incorrect.'); return; }
+        if (!/^\d{4}$/.test(next)){ alert('New MPIN must be exactly 4 digits.'); return; }
+        if (next !== confirmVal){ alert('New MPIN and confirmation don\'t match.'); return; }
+        state.mpin = next;
+        saveState();
+        alert('MPIN updated. Use it next time you unlock.');
+      }
+    );
+  });
+
   $('#editCapitalBtn').addEventListener('click', ()=>{
     openModal('Edit starting capital',
       '<label>Starting capital<input type="number" name="capital" value="'+state.initialCapital+'" required step="1"></label>',
@@ -1046,7 +1082,7 @@
     }
   });
 
-  /* ---------- PIN lock ---------- */
+  /* ---------- PIN lock (MPIN) ---------- */
 
   function initLock(){
     const lockScreen = document.getElementById('lockScreen');
@@ -1057,6 +1093,17 @@
     const keypad = document.getElementById('keypad');
     let buffer = '';
 
+    function unlockApp(){
+      lockScreen.hidden = true;
+      appRoot.hidden = false;
+      boot();
+    }
+
+    function showError(msg){
+      pinError.textContent = msg;
+      pinError.hidden = false;
+    }
+
     function renderDots(){
       dots.forEach((d,i)=> d.classList.toggle('filled', i < buffer.length));
     }
@@ -1066,15 +1113,16 @@
       renderDots();
     }
 
-    function submitIfReady(){
+    async function submitIfReady(){
       if (buffer.length !== 4) return;
-      if (buffer === APP_PIN){
-        lockScreen.hidden = true;
-        appRoot.hidden = false;
-        boot();
+      const entered = buffer;
+      await ensureStateLoaded();
+      const correctMpin = state.mpin || APP_MPIN_DEFAULT;
+      if (entered === correctMpin){
+        unlockApp();
       } else {
         dotsWrap.classList.add('error');
-        pinError.hidden = false;
+        showError('Incorrect MPIN');
         setTimeout(()=>{
           dotsWrap.classList.remove('error');
           reset();
@@ -1127,7 +1175,7 @@
   async function boot(){
     todayDateEl.textContent = new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
     initCharts();
-    await loadState();
+    await ensureStateLoaded();
     render();
     saveState();
   }
