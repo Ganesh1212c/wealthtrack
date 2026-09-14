@@ -175,9 +175,11 @@
   .cat-type-badge:hover{border:1px solid var(--accent);}
   .cat-type-badge.liability{color:var(--negative);background:rgba(196,103,95,0.12);}
   .modal-form .type-choice{margin-bottom:var(--sp-4);}
-  .modal-form label.radio-label{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--text-primary);font-size:.85rem;}
-  .radio-label input{margin:0;accent-color:var(--accent);}
-  .radio-hint{color:var(--text-tertiary);font-size:.75rem;}
+  .modal-form label.radio-label{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;cursor:pointer;}
+  .radio-label input{margin-top:3px;flex-shrink:0;accent-color:var(--accent);}
+  .radio-text{display:flex;flex-direction:column;min-width:0;}
+  .radio-title{color:var(--text-primary);font-size:.85rem;}
+  .radio-hint{color:var(--text-tertiary);font-size:.72rem;margin-top:1px;}
 
   /* modal */
   .modal-backdrop{position:fixed;inset:0;background:rgba(10,9,8,.6);display:flex;align-items:center;justify-content:center;padding:var(--sp-4);z-index:50;}
@@ -1012,8 +1014,8 @@
     openModal('Add category',
       '<label>Category name<input type="text" name="catname" required maxlength="30"></label>'
       + '<div class="type-choice">'
-      + '<label class="radio-label"><input type="radio" name="cattype" value="asset" checked> Asset <span class="radio-hint">adds to net worth</span></label>'
-      + '<label class="radio-label"><input type="radio" name="cattype" value="liability"> Liability <span class="radio-hint">subtracts from net worth</span></label>'
+      + '<label class="radio-label"><input type="radio" name="cattype" value="asset" checked><span class="radio-text"><span class="radio-title">Asset</span><span class="radio-hint">adds to net worth</span></span></label>'
+      + '<label class="radio-label"><input type="radio" name="cattype" value="liability"><span class="radio-text"><span class="radio-title">Liability</span><span class="radio-hint">subtracts from net worth</span></span></label>'
       + '</div>',
       form=>{
         const name = form.catname.value.trim();
