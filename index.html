@@ -690,8 +690,7 @@
     compareChart.data.datasets[0].backgroundColor = state.categories.map(c=> c.type==='liability' ? '#C4675F' : c.color);
     compareChart.update();
 
-    const total = grandTotal();
-    const points = [{label:'Start', total: state.initialCapital}, ...state.history, {label:'Today', total: total}];
+    const points = [{label:'Start', total: state.initialCapital}, ...state.history];
     growthChart.data.labels = points.map(p=>p.label);
     growthChart.data.datasets[0].data = points.map(p=>p.total);
     growthChart.update();
@@ -986,9 +985,26 @@
     }
   });
 
+  function todayLabel(){
+    return new Date().toLocaleDateString('en-IN',{day:'numeric', month:'short'});
+  }
+
+  // Runs once per app open. Only creates today's point if it doesn't exist yet —
+  // never touches it again after that, even if you reopen the app later the same day.
+  function autoSnapshot(){
+    const label = todayLabel();
+    const last = state.history[state.history.length-1];
+    if (!last || last.label !== label){
+      state.history.push({label, total: grandTotal()});
+      saveState();
+    }
+  }
+
+  // Runs only when you tap "Record today" / "Snapshot" — a deliberate refresh
+  // of today's point, overwriting it if it already exists.
   function recordSnapshot(){
     const total = grandTotal();
-    const label = new Date().toLocaleDateString('en-IN',{day:'numeric', month:'short'});
+    const label = todayLabel();
     const last = state.history[state.history.length-1];
     if (last && last.label===label){ last.total = total; }
     else { state.history.push({label, total}); }
@@ -1115,7 +1131,8 @@
     todayDateEl.textContent = new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
     initCharts();
     await loadState();
-    recordSnapshot(); // logs today's total once per day automatically, then renders
+    autoSnapshot();
+    render();
   }
   initLock();
 
