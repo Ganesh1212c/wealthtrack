@@ -117,6 +117,7 @@
   .panel{background:var(--bg-elevated);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:var(--sp-5);}
   .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-4);}
   .panel-head h2{font-size:1rem;font-weight:500;}
+  .panel-head .link-edit{margin-top:0;}
   .hint{margin-top:var(--sp-3);font-size:.78rem;color:var(--text-tertiary);}
 
   /* accounts */
@@ -226,7 +227,6 @@
     <div class="brand"><span class="brand-mark"></span>Ledger</div>
     <div class="topbar-right">
       <span class="date" id="todayDate"></span>
-      <button class="btn btn-ghost small" id="snapshotBtn">Snapshot</button>
     </div>
   </header>
 
@@ -251,10 +251,10 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Growth</h2>
-        <button class="btn btn-ghost small" id="snapshotBtn2">Record today</button>
+        <button class="link-edit" id="clearHistoryBtn">Clear history</button>
       </div>
       <div class="chart-box tall"><canvas id="growthChart"></canvas></div>
-      <p class="hint">Logged automatically once a day — tap "Record today" to refresh today’s point.</p>
+      <p class="hint">Today updates live as you use the app — it locks in once the date changes and a new point starts.</p>
     </div>
     <div class="panel">
       <div class="panel-head"><h2>By category</h2></div>
@@ -697,6 +697,7 @@
   }
 
   function render(){
+    syncTodayHistory();
     renderHero();
     renderCards();
     renderInsights();
@@ -989,30 +990,26 @@
     return new Date().toLocaleDateString('en-IN',{day:'numeric', month:'short'});
   }
 
-  // Runs once per app open. Only creates today's point if it doesn't exist yet —
-  // never touches it again after that, even if you reopen the app later the same day.
-  function autoSnapshot(){
+  // Called on every render. While the date matches today's label, this keeps
+  // overwriting the last history entry with the live total — so "today" moves
+  // as you edit. The moment the date changes, the label no longer matches, so
+  // a fresh entry is pushed instead and everything before it is left untouched
+  // (effectively "locking in" what today's value was, right at the date change).
+  function syncTodayHistory(){
     const label = todayLabel();
+    const total = grandTotal();
     const last = state.history[state.history.length-1];
-    if (!last || last.label !== label){
-      state.history.push({label, total: grandTotal()});
-      saveState();
-    }
+    if (last && last.label === label){ last.total = total; }
+    else { state.history.push({label, total}); }
   }
 
-  // Runs only when you tap "Record today" / "Snapshot" — a deliberate refresh
-  // of today's point, overwriting it if it already exists.
-  function recordSnapshot(){
-    const total = grandTotal();
-    const label = todayLabel();
-    const last = state.history[state.history.length-1];
-    if (last && last.label===label){ last.total = total; }
-    else { state.history.push({label, total}); }
+  function clearHistory(){
+    if (!confirm('Clear all recorded growth history? This can\'t be undone.')) return;
+    state.history = [];
     render();
     saveState();
   }
-  $('#snapshotBtn').addEventListener('click', recordSnapshot);
-  $('#snapshotBtn2').addEventListener('click', recordSnapshot);
+  $('#clearHistoryBtn').addEventListener('click', clearHistory);
   $('#backupBtn').addEventListener('click', downloadBackup);
 
   $('#editCapitalBtn').addEventListener('click', ()=>{
@@ -1131,8 +1128,8 @@
     todayDateEl.textContent = new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
     initCharts();
     await loadState();
-    autoSnapshot();
     render();
+    saveState();
   }
   initLock();
 
