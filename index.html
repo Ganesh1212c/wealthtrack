@@ -173,10 +173,15 @@
   .remove-category:hover{color:var(--negative);}
   .card.liability{border-color:rgba(196,103,95,0.35);}
   .card.liability .card-amount{color:var(--negative);}
+  .card.excluded{opacity:.6;}
+  .card.excluded .card-amount{color:var(--text-tertiary);}
   .category-total.negative{color:var(--negative);}
+  .category-total.excluded{color:var(--text-tertiary);}
+  .category-panel.excluded{opacity:.7;}
   .cat-type-badge{font:inherit;font-size:.66rem;padding:3px 8px;border-radius:20px;border:none;background:var(--bg-elevated-2);color:var(--text-tertiary);cursor:pointer;white-space:nowrap;flex-shrink:0;}
   .cat-type-badge:hover{border:1px solid var(--accent);}
   .cat-type-badge.liability{color:var(--negative);background:rgba(196,103,95,0.12);}
+  .cat-type-badge.excluded{color:var(--text-tertiary);background:var(--bg-elevated-2);}
   .modal-type-row{display:flex;align-items:center;gap:10px;margin-bottom:var(--sp-4);}
   .modal-type-label{color:var(--text-secondary);font-size:.82rem;}
 
@@ -311,21 +316,21 @@
     initialCapital: 87900,
     mpin: '2702',
     categories: [
-      { id:'fd', name:'Fixed Deposits', type:'asset', color: PALETTE[0], open:true, accounts:[
+      { id:'fd', name:'Fixed Deposits', type:'asset', included:true, color: PALETTE[0], open:true, accounts:[
         {id:'fd1', name:'HDFC', amount:7301, splits:[]},
         {id:'fd2', name:'Kotak', amount:2000, splits:[]},
         {id:'fd3', name:'Slice', amount:0, splits:[]}
       ]},
-      { id:'demat', name:'Demat', type:'asset', color: PALETTE[1], open:true, accounts:[
+      { id:'demat', name:'Demat', type:'asset', included:true, color: PALETTE[1], open:true, accounts:[
         {id:'d1', name:'Upstox', amount:94132, splits:[]},
         {id:'d2', name:'Upstox wallet', amount:0, splits:[]}
       ]},
-      { id:'savings', name:'Savings', type:'asset', color: PALETTE[2], open:true, accounts:[
+      { id:'savings', name:'Savings', type:'asset', included:true, color: PALETTE[2], open:true, accounts:[
         {id:'s1', name:'HDFC', amount:1000, splits:[]},
         {id:'s2', name:'Slice', amount:8000, splits:[]},
         {id:'s3', name:'Kotak', amount:187, splits:[]}
       ]},
-      { id:'lent', name:'Lent out', type:'asset', color: PALETTE[3], open:true, accounts:[
+      { id:'lent', name:'Lent out', type:'asset', included:true, color: PALETTE[3], open:true, accounts:[
         {id:'l1', name:'Tejas', amount:1000, splits:[]}
       ]}
     ],
@@ -364,7 +369,9 @@
   }
   function categoryTotal(cat){ return cat.accounts.reduce((s,a)=>s+accountTotal(a),0); }
   function categoryImpact(cat){ return cat.type==='liability' ? -categoryTotal(cat) : categoryTotal(cat); }
-  function grandTotal(){ return state.categories.reduce((s,c)=>s+categoryImpact(c),0); }
+  function isCounted(cat){ return cat.included !== false; }
+  function isCountedAsset(cat){ return cat.type !== 'liability' && isCounted(cat); }
+  function grandTotal(){ return state.categories.reduce((s,c)=> s + (isCounted(c) ? categoryImpact(c) : 0), 0); }
 
   const $ = sel => document.querySelector(sel);
   const heroNumberEl = $('#heroNumber');
@@ -481,24 +488,29 @@
   }
 
   function renderCards(){
-    const totalAssets = state.categories.filter(c=>c.type!=='liability').reduce((s,c)=>s+categoryTotal(c),0) || 1;
+    const totalAssets = state.categories.filter(isCountedAsset).reduce((s,c)=>s+categoryTotal(c),0) || 1;
     cardsEl.innerHTML = state.categories.map(cat=>{
       const isLiability = cat.type==='liability';
+      const isExcluded = !isCounted(cat);
       const t = categoryTotal(cat);
       const impact = categoryImpact(cat);
-      const share = isLiability ? 0 : (t/totalAssets)*100;
-      return '<button class="card '+(isLiability?'liability':'')+'" data-jump="'+cat.id+'" style="--cat-color:'+cat.color+'">'
+      const share = (isLiability || isExcluded) ? 0 : (t/totalAssets)*100;
+      let suffix = '';
+      if (isExcluded) suffix = ' · not counted';
+      else if (isLiability) suffix = ' · liability';
+      const cardClass = isExcluded ? 'excluded' : (isLiability ? 'liability' : '');
+      return '<button class="card '+cardClass+'" data-jump="'+cat.id+'" style="--cat-color:'+cat.color+'">'
         + '<span class="card-dot"></span>'
-        + '<span class="card-name">'+esc(cat.name)+(isLiability?' · liability':'')+'</span>'
+        + '<span class="card-name">'+esc(cat.name)+suffix+'</span>'
         + '<span class="card-amount">'+formatINR(impact)+'</span>'
-        + (isLiability ? '' : '<span class="card-bar"><span class="card-bar-fill" style="width:'+share+'%"></span></span>')
+        + ((isLiability || isExcluded) ? '' : '<span class="card-bar"><span class="card-bar-fill" style="width:'+share+'%"></span></span>')
         + '</button>';
     }).join('');
   }
 
   function renderInsights(){
     const total = grandTotal();
-    const assetCats = state.categories.filter(c=>c.type!=='liability');
+    const assetCats = state.categories.filter(isCountedAsset);
     const totalAssets = assetCats.reduce((s,c)=>s+categoryTotal(c),0);
     const chips = [];
 
@@ -512,7 +524,7 @@
     const gain = total - state.initialCapital;
     chips.push('<div class="insight"><span class="insight-dot" style="background:'+(gain>=0?'var(--positive)':'var(--negative)')+'"></span>'+(gain>=0?'Grown ':'Down ')+formatINR(Math.abs(gain))+' since you started with '+formatINR(state.initialCapital)+'</div>');
 
-    const liabilityCats = state.categories.filter(c=>c.type==='liability' && categoryTotal(c)>0);
+    const liabilityCats = state.categories.filter(c=>c.type==='liability' && isCounted(c) && categoryTotal(c)>0);
     if (liabilityCats.length){
       const totalLiabilities = liabilityCats.reduce((s,c)=>s+categoryTotal(c),0);
       chips.push('<div class="insight"><span class="insight-dot" style="background:var(--negative)"></span>'+formatINR(totalLiabilities)+' in liabilities</div>');
@@ -571,14 +583,15 @@
   function renderAccounts(){
     categoryListEl.innerHTML = state.categories.map(cat=>{
       const isLiability = cat.type==='liability';
+      const isExcluded = !isCounted(cat);
       const rows = cat.accounts.map(acc => renderAccountRow(cat, acc)).join('');
-      return '<div class="category-panel" id="cat-'+cat.id+'" style="--cat-color:'+cat.color+'">'
+      return '<div class="category-panel '+(isExcluded?'excluded':'')+'" id="cat-'+cat.id+'" style="--cat-color:'+cat.color+'">'
         + '<div class="category-head" data-action="toggle-category" data-cat="'+cat.id+'" role="button" tabindex="0" aria-expanded="'+cat.open+'">'
         + '<span class="chev '+(cat.open?'open':'')+'">'+ICON.chevron+'</span>'
         + '<span class="category-dot"></span>'
         + '<span class="category-name" data-action="edit-field" data-field="name">'+esc(cat.name)+'</span>'
         + '<span class="cat-type-badge '+(isLiability?'liability':'')+'" data-action="toggle-category-type" data-cat="'+cat.id+'" title="Click to switch between asset and liability">'+(isLiability?'Liability':'Asset')+'</span>'
-        + '<span class="category-total '+(isLiability?'negative':'')+'">'+formatINR(categoryImpact(cat))+'</span>'
+        + '<span class="category-total '+(isExcluded?'excluded':(isLiability?'negative':''))+'">'+formatINR(categoryImpact(cat))+'</span>'
         + '</div>'
         + '<div class="category-body" '+(cat.open?'':'hidden')+'>'
         + '<ul class="account-list">'+rows+'</ul>'
@@ -591,6 +604,7 @@
         + '<button type="button" class="btn btn-ghost small" data-action="cancel-add-account">Cancel</button>'
         + '</form>'
         + '</div>'
+        + '<button class="remove-category" data-action="toggle-category-included" data-cat="'+cat.id+'">'+(isExcluded?'Not counted toward net worth \u2014 tap to include':'Counted toward net worth \u2014 tap to exclude')+'</button>'
         + '<button class="remove-category" data-action="remove-category" data-cat="'+cat.id+'">Remove '+esc(cat.name)+' category</button>'
         + '</div>'
         + '</div>';
@@ -691,7 +705,7 @@
   }
 
   function updateCharts(){
-    const assetCats = state.categories.filter(c=>c.type!=='liability' && categoryTotal(c)>0);
+    const assetCats = state.categories.filter(c=>isCountedAsset(c) && categoryTotal(c)>0);
     const totalAssets = assetCats.reduce((s,c)=>s+categoryTotal(c),0);
     allocationCenterLabel = formatINR(totalAssets);
 
@@ -708,7 +722,9 @@
 
     compareChart.data.labels = state.categories.map(c=>c.name);
     compareChart.data.datasets[0].data = state.categories.map(c=>categoryImpact(c));
-    compareChart.data.datasets[0].backgroundColor = state.categories.map(c=> c.type==='liability' ? '#C4675F' : c.color);
+    compareChart.data.datasets[0].backgroundColor = state.categories.map(c=>
+      !isCounted(c) ? '#6E6A61' : (c.type==='liability' ? '#C4675F' : c.color)
+    );
     compareChart.update();
 
     const points = [{label:'Start', total: state.initialCapital}, ...state.history];
@@ -836,6 +852,16 @@
       const cat = state.categories.find(c=>c.id===toggleTypeBtn.dataset.cat);
       if (cat){
         cat.type = cat.type==='liability' ? 'asset' : 'liability';
+        render(); saveState();
+      }
+      return;
+    }
+
+    const toggleIncludedBtn = e.target.closest('[data-action="toggle-category-included"]');
+    if (toggleIncludedBtn){
+      const cat = state.categories.find(c=>c.id===toggleIncludedBtn.dataset.cat);
+      if (cat){
+        cat.included = !isCounted(cat);
         render(); saveState();
       }
       return;
@@ -1066,13 +1092,19 @@
       + '<div class="modal-type-row">'
       + '<span class="modal-type-label">Type</span>'
       + '<button type="button" class="cat-type-badge" data-role="type-toggle" data-type="asset">Asset</button>'
+      + '</div>'
+      + '<div class="modal-type-row">'
+      + '<span class="modal-type-label">Count toward net worth</span>'
+      + '<button type="button" class="cat-type-badge" data-role="included-toggle" data-included="1">Counted</button>'
       + '</div>',
       form=>{
         const name = form.catname.value.trim();
         if (!name) return;
         const typeBtn = form.querySelector('[data-role="type-toggle"]');
+        const includedBtn = form.querySelector('[data-role="included-toggle"]');
         const type = typeBtn ? typeBtn.dataset.type : 'asset';
-        state.categories.push({ id: uid('c'), name, type, color: nextColor(), open:true, accounts:[] });
+        const included = includedBtn ? includedBtn.dataset.included === '1' : true;
+        state.categories.push({ id: uid('c'), name, type, included, color: nextColor(), open:true, accounts:[] });
         render(); saveState();
       }
     );
@@ -1083,6 +1115,15 @@
         typeBtn.dataset.type = next;
         typeBtn.textContent = next === 'liability' ? 'Liability' : 'Asset';
         typeBtn.classList.toggle('liability', next === 'liability');
+      });
+    }
+    const includedBtn = modalEl.querySelector('[data-role="included-toggle"]');
+    if (includedBtn){
+      includedBtn.addEventListener('click', ()=>{
+        const next = includedBtn.dataset.included === '1' ? '0' : '1';
+        includedBtn.dataset.included = next;
+        includedBtn.textContent = next === '1' ? 'Counted' : 'Not counted';
+        includedBtn.classList.toggle('excluded', next === '0');
       });
     }
   });
